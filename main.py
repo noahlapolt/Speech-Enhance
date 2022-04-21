@@ -1,3 +1,4 @@
+import numpy as np
 import pyaudio
 import torch
 import wave
@@ -10,7 +11,6 @@ class Model(torch.nn.Module):
 
     def forward(self):
         pass
-
 
 class Microphone():
     '''
@@ -158,6 +158,10 @@ class NoisyIEEE():
                     printProgressBar(1, prefix=f'{directory} Progress:')
                     print()
 
+def STFT(data):
+    data*np.exp(-1j)
+
+
 def process_data(data):
     '''
     Preprocesses the data to get more information out of it.
@@ -171,6 +175,9 @@ def process_data(data):
     -------
     list: The same chunk, but after calculations.
     '''
+
+    # GCCp,q(t,f,k) = np.real((()/())*np.exp())
+
     # Loops through data.
     # for byte in data:
     #     print(byte)
@@ -205,4 +212,4 @@ if __name__ == '__main__':
     mic = Microphone(2, 1, 16000, CHUNK)
     data = NoisyIEEE(CHUNK)
 
-    print(len(data.all_data['IEEE_Female']['Babble']['-5dB']['Features'][-2]))
+    print(data.all_data['IEEE_Female']['Babble']['-5dB']['Features'][-2])
