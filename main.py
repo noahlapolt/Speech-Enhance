@@ -1,6 +1,7 @@
 import pyaudio
 import torch
 import wave
+import json
 import os
 
 class Model(torch.nn.Module):
@@ -69,23 +70,112 @@ class Microphone():
 class NoisyIEEE():
     '''
     Contains all of NoisyIEEE data in a varity of datasets.
+
+    Assumes width of 2, 2 channels and 16000 sample rate.
+    Assumes files are same size.
     '''
     def __init__(self, chunk):
+        '''
+        Collects all of the IEEE data.
+        '''
+        # Builds data structure.
+        self.all_data = {
+            'IEEE_Female':{
+                'Babble':{
+                    '-2dB':{
+                        'Features':[],
+                        'Targets':[]
+                    },
+                    '-5dB':{
+                        'Features':[],
+                        'Targets':[]
+                    }
+                }, 
+                'Cafeteria':{
+                    '-2dB':{
+                        'Features':[],
+                        'Targets':[]
+                    },
+                    '-5dB':{
+                        'Features':[],
+                        'Targets':[]
+                    }
+                }
+            },
+            'IEEE_Male':{
+                'Babble':{
+                    '-2dB':{
+                        'Features':[],
+                        'Targets':[]
+                    },
+                    '-5dB':{
+                        'Features':[],
+                        'Targets':[]
+                    }
+                }, 
+                'Cafeteria':{
+                    '-2dB':{
+                        'Features':[],
+                        'Targets':[]
+                    },
+                    '-5dB':{
+                        'Features':[],
+                        'Targets':[]
+                    }
+                }
+            }
+        }
+
         # Adds all data to dataframes.
         for gen in ['IEEE_Female', 'IEEE_Male']:
             for kind in ['Babble', 'Cafeteria']:
                 for level in ['-2dB', '-5dB']:
                     directory = f'NoisyIEEE/{gen}/{kind}/{level}'
+                    used = []
+                    
+                    # Goes through all file names in current directory.
                     for _, _, files in os.walk(directory):
-                        for filename in files:
-                            wav_file = wave.open(f'{directory}/{filename}', mode='rb')
-                            for i in range(int(wav_file.getnframes()/chunk)):
-                                file_data = wav_file.readframes(chunk)
-                                data = [file_data[i:i+2] for i in range(0, 2*CHUNK, 2)]
-                            wav_file.close()
+                        for f, filename in enumerate(files):
+                            prefix = filename.split('_')[0]
 
-def process_data(self, data):
-    pass
+                            # Gets clean and noisy data.
+                            if prefix not in used:
+                                used.append(prefix)
+                                clean_file = wave.open(f'{directory}/{prefix}_clean.wav', mode='rb')
+                                noisy_file = wave.open(f'{directory}/{prefix}_noisy.wav', mode='rb')
+                                for _ in range(int(clean_file.getnframes()/chunk)+1):
+                                    noisy_data = process_data(noisy_file.readframes(chunk))
+                                    clean_data = process_data(clean_file.readframes(chunk))
+                                    
+                                    # Adds data to correct area.
+                                    self.all_data[gen][kind][level]['Features'].append(noisy_data)
+                                    self.all_data[gen][kind][level]['Targets'].append(clean_data)
+
+                                clean_file.close()
+                                noisy_file.close()
+                                printProgressBar(f/len(files), prefix=f'{directory} Progress:')
+                    # Newline.
+                    printProgressBar(1, prefix=f'{directory} Progress:')
+                    print()
+
+def process_data(data):
+    '''
+    Preprocesses the data to get more information out of it.
+
+    Parameters
+    ----------
+    data: list
+        A chunk of data as bytes.
+
+    Returns
+    -------
+    list: The same chunk, but after calculations.
+    '''
+    # Loops through data.
+    # for byte in data:
+    #     print(byte)
+
+    return [byte for byte in data]
 
 def predict():
     pass
@@ -93,7 +183,26 @@ def predict():
 def train_model():
     pass
 
+def printProgressBar (val, prefix = ''):
+    '''
+    Loading bar in the console to keep track of tasks.
+
+    Parameters
+    ----------
+    val: float
+        The percent to display.
+    prefix: str
+        The value before the loading bar.
+    '''
+    percent = ("{0:." + str(1) + "f}").format(100*val)
+    length = 100
+    filledLength = int(length*val)
+    bar = '█' * filledLength + '-' * (length - filledLength)
+    print(f'\r{prefix} |{bar}| {percent}% Complete', end='\r')
+
 if __name__ == '__main__':
-    CHUNK = 2
+    CHUNK = 1600
     mic = Microphone(2, 1, 16000, CHUNK)
     data = NoisyIEEE(CHUNK)
+
+    print(len(data.all_data['IEEE_Female']['Babble']['-5dB']['Features'][-2]))
