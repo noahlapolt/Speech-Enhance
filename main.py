@@ -1,8 +1,10 @@
+import matplotlib.pyplot as plt
 import numpy as np
+import argparse
 import pyaudio
+import signal
 import torch
 import wave
-import json
 import os
 
 class Model(torch.nn.Module):
@@ -31,6 +33,7 @@ class Microphone():
         chunk: int
             The size of the data to fetch at once.
         '''
+        # Builds mic.
         self.chunk = chunk
         self.p = pyaudio.PyAudio()
         self.s = self.p.open(format=self.p.get_format_from_width(width),
@@ -38,7 +41,14 @@ class Microphone():
                 rate=rate,
                 input=True,
                 output=True,
-                frames_per_buffer=chunk)
+                frames_per_buffer=chunk,
+                stream_callback=self.callback)
+
+        # Turns on mic.
+        self.s.start_stream()
+        signal.signal(signal.SIGINT, lambda num, frame: self.__del__())
+        while self.s.is_active():
+            pass
 
     def __del__(self):
         '''
@@ -48,24 +58,9 @@ class Microphone():
         self.s.close()
         self.p.terminate()
 
-    def record(self):
-        '''
-        Records a chunk of sound.
-        '''
-        return self.s.read(self.chunk)
+    def callback(self, in_data, frame_count, time_info, status):
 
-    def play(self, data):
-        '''
-        Plays sound on the speaker.
-
-        Parameters
-        ----------
-        data: bytes
-            The data to be played on the speaker.
-
-        TODO: Play sound to virtual microphone.
-        '''
-        self.s.write(data)
+        return (retrive_data(process_data(in_data)), pyaudio.paContinue)
 
 class NoisyIEEE():
     '''
@@ -74,7 +69,7 @@ class NoisyIEEE():
     Assumes width of 2, 2 channels and 16000 sample rate.
     Assumes files are same size.
     '''
-    def __init__(self, chunk):
+    def __init__(self, chunk, overlap):
         '''
         Collects all of the IEEE data.
         '''
@@ -144,6 +139,13 @@ class NoisyIEEE():
                                 clean_file = wave.open(f'{directory}/{prefix}_clean.wav', mode='rb')
                                 noisy_file = wave.open(f'{directory}/{prefix}_noisy.wav', mode='rb')
                                 for _ in range(int(clean_file.getnframes()/chunk)+1):
+                                    # Applies overlap.
+                                    if noisy_file.tell() != 0:
+                                        pos = noisy_file.tell() - overlap
+                                        clean_file.setpos(pos)
+                                        noisy_file.setpos(pos)
+
+                                    # Reads and processes data.
                                     noisy_data = process_data(noisy_file.readframes(chunk))
                                     clean_data = process_data(clean_file.readframes(chunk))
                                     
@@ -154,17 +156,32 @@ class NoisyIEEE():
                                 clean_file.close()
                                 noisy_file.close()
                                 printProgressBar(f/len(files), prefix=f'{directory} Progress:')
-                    # Newline.
+                    
+                    # Shows 100%.
                     printProgressBar(1, prefix=f'{directory} Progress:')
                     print()
+                    break
+                break
+            break
 
-def STFT(data):
-    data*np.exp(-1j)
-
+def parse_args():
+    '''
+    Gets command line arguments for settings.
+    '''
+    # Create an argument parser that will allow us to capture command line arguments and print help (and default values)
+    parser = argparse.ArgumentParser(description='Trains or runs speech enhancment model.',
+    formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('-m', type=str, help='The mode to launch in. Train builds the model from the data. Mic runs it as a speech enhancment Mic.', choices=['train', 'mic'], required=True)
+    parser.add_argument('-o', type=int, help='Chunk overlap amount.', default=32)
+    parser.add_argument('-c', type=int, help='The size of the chunk to sample.', default=256)
+    parser.add_argument('-e', type=int, help='The number of training iterations', default=100)
+    parser.add_argument('-l', type=float, help='The learning rate of the model.', default=0.1)
+    
+    return parser.parse_args()
 
 def process_data(data):
     '''
-    Preprocesses the data to get more information out of it.
+    Gets the short time fast Fourier transform of the data.
 
     Parameters
     ----------
@@ -176,13 +193,15 @@ def process_data(data):
     list: The same chunk, but after calculations.
     '''
 
-    # GCCp,q(t,f,k) = np.real((()/())*np.exp())
+    # Gets chunk of data in integer form.
+    chunk = [int.from_bytes(data[i:i+2], 'big') for i in range(0, len(data), 2)]
+    
+    # Applies stfft.
+    #*np.hanning(len(chunk))
+    return np.fft.fft(chunk*np.hanning(len(chunk)))
 
-    # Loops through data.
-    # for byte in data:
-    #     print(byte)
-
-    return [byte for byte in data]
+def retrive_data(data):
+    return np.real(np.divide(np.fft.ifft(data), np.hanning(len(data)))).astype(np.ushort).byteswap().tobytes()
 
 def predict():
     pass
@@ -202,14 +221,27 @@ def printProgressBar (val, prefix = ''):
         The value before the loading bar.
     '''
     percent = ("{0:." + str(1) + "f}").format(100*val)
-    length = 100
+    length = os.get_terminal_size().columns - len(prefix) - 20
     filledLength = int(length*val)
     bar = '█' * filledLength + '-' * (length - filledLength)
     print(f'\r{prefix} |{bar}| {percent}% Complete', end='\r')
 
 if __name__ == '__main__':
-    CHUNK = 1600
-    mic = Microphone(2, 1, 16000, CHUNK)
-    data = NoisyIEEE(CHUNK)
+    args = parse_args()
 
-    print(data.all_data['IEEE_Female']['Babble']['-5dB']['Features'][-2])
+    if args.m == 'train':
+        # Builds the data into a dataframe.
+        data = NoisyIEEE(args.c, args.o)
+        
+        # Displays a portion of the data.
+        y = np.real(data.all_data['IEEE_Female']['Babble']['-2dB']['Features'][-2])
+        x = range(args.c)
+
+        plt.plot(x, y)
+        plt.show()
+    else:
+        print('Use ctrl+c to stop program.')
+
+        # Creates a microphone to sample data.
+        mic = Microphone(2, 1, 16000, args.c)
+        
