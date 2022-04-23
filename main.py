@@ -7,12 +7,16 @@ import torch
 import wave
 import os
 
+# Determinds if it can be moved to the gpu.
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 class Model(torch.nn.Module):
     def __init__(self):
         super().__int__()
 
     def forward(self):
         pass
+
 
 class Microphone():
     '''
@@ -59,8 +63,22 @@ class Microphone():
         self.p.terminate()
 
     def callback(self, in_data, frame_count, time_info, status):
+        '''
+        Manages data from microphone.
 
+        Parameters
+        ----------
+        in_date: bytes
+            The raw data from the microphone.
+        frame_count: int
+            The number of frames in the callback.
+        time_info: dict
+            Time values related to the callback.
+        status: paFlags
+            PortAuido callback flag.
+        '''
         return (retrive_data(process_data(in_data)), pyaudio.paContinue)
+
 
 class NoisyIEEE():
     '''
@@ -164,6 +182,7 @@ class NoisyIEEE():
                 break
             break
 
+
 def parse_args():
     '''
     Gets command line arguments for settings.
@@ -190,17 +209,24 @@ def process_data(data):
 
     Returns
     -------
-    list: The same chunk, but after calculations.
+    list: The short time fast Fourier transform of the chunk.
     '''
 
     # Gets chunk of data in integer form.
     chunk = [int.from_bytes(data[i:i+2], 'big') for i in range(0, len(data), 2)]
-    
+
     # Applies stfft.
-    #*np.hanning(len(chunk))
     return np.fft.fft(chunk*np.hanning(len(chunk)))
 
 def retrive_data(data):
+    '''
+    Takes the data from the fft back into byte data.
+
+    Parameters
+    ----------
+    data: list
+        A list of complex numbers.
+    '''
     return np.real(np.divide(np.fft.ifft(data), np.hanning(len(data)))).astype(np.ushort).byteswap().tobytes()
 
 def predict():
