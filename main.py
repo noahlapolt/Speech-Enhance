@@ -321,7 +321,7 @@ def train_model(data, epochs, lr, data_opt='all'):
         
         # Loading bar and saves.
         avg_loss = np.mean(losses)
-        bar.prefix = f'Loss: {avg_loss} Est Time Left: {(time.time()-start_time)*(epochs-e)} Change in loss: {avg_loss-last_loss}'
+        bar.prefix = f'Loss: {np.around(avg_loss)} Est Time Left: {np.around((time.time()-start_time)*(epochs-e), decimals=2)}s Change in loss: {np.around(avg_loss-last_loss)}'
         bar.val = e/epochs
         torch.save(model.state_dict(), 'model.pt')
         last_loss = avg_loss
@@ -387,13 +387,8 @@ if __name__ == '__main__':
         # Builds the data into a dataframe.
         data = NoisyIEEE(chunk_size)
         train_model(data.all_mix, args.e, args.l)
-
-        # Creates a microphone to sample data.
-        print('Use ctrl+c to stop program.')
-        mic = Microphone(2, 1, 16000, chunk_size)
     else:
-        print('Use ctrl+c to stop program.')
-
         # Creates a microphone to sample data.
+        print('Use ctrl+c to stop program.')
         mic = Microphone(2, 1, 16000, chunk_size)
         
